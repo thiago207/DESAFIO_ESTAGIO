@@ -3,6 +3,13 @@
         max-width: 1400px;
         margin: 20px auto;
     }
+    .painel-filtros {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
     .produto-card {
         border: 1px solid #ddd;
         border-radius: 8px;
@@ -48,13 +55,6 @@
         display: inline-block;
         margin-right: 10px;
     }
-    .carrinho-badge {
-        background-color: #e74c3c;
-        border-radius: 10px;
-        padding: 2px 8px;
-        font-size: 12px;
-        font-weight: bold;
-    }
     .carrinho-item {
         border-bottom: 1px solid #eee;
         padding: 15px 0;
@@ -69,6 +69,9 @@
         text-align: right;
         margin-top: 20px;
     }
+    .filtro-group {
+        margin-bottom: 15px;
+    }
 </style>
 
 <div class="container produtos-container">
@@ -77,6 +80,80 @@
     </div>
 
     <div id="alerta"></div>
+
+    <!-- PAINEL DE FILTROS -->
+    <div class="painel-filtros">
+        <h4><span class="glyphicon glyphicon-filter"></span> Filtros de Busca</h4>
+        <hr>
+        
+        <div class="row">
+            <div class="col-md-3">
+                <div class="filtro-group">
+                    <label for="filtro_nome">🔍 Nome do Produto:</label>
+                    <input type="text" class="form-control" id="filtro_nome" placeholder="Buscar produto...">
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="filtro-group">
+                    <label for="filtro_loja">🏪 Loja:</label>
+                    <select class="form-control" id="filtro_loja">
+                        <option value="">Todas as Lojas</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="filtro-group">
+                    <label for="filtro_categoria">📂 Categoria:</label>
+                    <select class="form-control" id="filtro_categoria">
+                        <option value="">Todas as Categorias</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="filtro-group">
+                    <label>&nbsp;</label>
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" id="filtro_estoque" checked> ✅ Apenas com Estoque
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-3">
+                <div class="filtro-group">
+                    <label for="filtro_preco_min">💰 Preço Mínimo:</label>
+                    <input type="number" class="form-control" id="filtro_preco_min" placeholder="0.00" step="0.01" min="0">
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="filtro-group">
+                    <label for="filtro_preco_max">💰 Preço Máximo:</label>
+                    <input type="number" class="form-control" id="filtro_preco_max" placeholder="9999.99" step="0.01" min="0">
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="filtro-group">
+                    <label>&nbsp;</label>
+                    <div>
+                        <button class="btn btn-primary" onclick="aplicarFiltros()">
+                            <span class="glyphicon glyphicon-search"></span> Buscar
+                        </button>
+                        <button class="btn btn-default" onclick="limparFiltros()">
+                            <span class="glyphicon glyphicon-refresh"></span> Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- LISTA DE PRODUTOS -->
     <div id="listaProdutos">
@@ -113,8 +190,13 @@
 </div>
 
 <script>
-    // Carregar produtos ao iniciar
+    // Objeto para armazenar os produtos em memória
+    let produtosData = [];
+
+    // Carregar ao iniciar
     $(document).ready(function() {
+        carregarLojas();
+        carregarCategorias();
         carregarProdutos();
         atualizarBadgeCarrinho();
         
@@ -122,16 +204,84 @@
         $('#icone_carrinho').parent().click(function() {
             abrirCarrinho();
         });
+        
+        // Buscar ao pressionar Enter nos campos
+        $('#filtro_nome, #filtro_preco_min, #filtro_preco_max').on('keypress', function(e) {
+            if (e.which === 13) {
+                aplicarFiltros();
+            }
+        });
     });
 
-    // Carregar lista de produtos
+    // Carregar lista de lojas
+    function carregarLojas() {
+        $.ajax({
+            url: "<?=base_url('cliente/ajax_listarLojas')?>",
+            type: "GET",
+            dataType: "json",
+            cache: false,
+            success: function(lojas) {
+                let html = '<option value="">Todas as Lojas</option>';
+                lojas.forEach(function(loja) {
+                    html += `<option value="${loja.id_usuario}">${loja.nome_usuario}</option>`;
+                });
+                $('#filtro_loja').html(html);
+            }
+        });
+    }
+
+    // Carregar lista de categorias
+    function carregarCategorias() {
+        $.ajax({
+            url: "<?=base_url('cliente/ajax_listarCategorias')?>",
+            type: "GET",
+            dataType: "json",
+            cache: false,
+            success: function(categorias) {
+                let html = '<option value="">Todas as Categorias</option>';
+                categorias.forEach(function(cat) {
+                    html += `<option value="${cat.id_categoria}">${cat.nome}</option>`;
+                });
+                $('#filtro_categoria').html(html);
+            }
+        });
+    }
+
+    // Aplicar filtros
+    function aplicarFiltros() {
+        carregarProdutos();
+    }
+
+    // Limpar filtros
+    function limparFiltros() {
+        $('#filtro_nome').val('');
+        $('#filtro_loja').val('');
+        $('#filtro_categoria').val('');
+        $('#filtro_preco_min').val('');
+        $('#filtro_preco_max').val('');
+        $('#filtro_estoque').prop('checked', true);
+        carregarProdutos();
+    }
+
+    // Carregar lista de produtos com filtros
     function carregarProdutos() {
+        let filtros = {
+            nome: $('#filtro_nome').val(),
+            id_loja: $('#filtro_loja').val(),
+            id_categoria: $('#filtro_categoria').val(),
+            preco_min: $('#filtro_preco_min').val(),
+            preco_max: $('#filtro_preco_max').val(),
+            apenas_estoque: $('#filtro_estoque').is(':checked') ? 1 : 0
+        };
+
         $.ajax({
             url: "<?=base_url('cliente/ajax_listarProdutos')?>",
             type: "GET",
             dataType: "json",
+            data: filtros,
             cache: false,
             success: function(produtos) {
+                produtosData = produtos;
                 exibirProdutos(produtos);
             },
             error: function() {
@@ -144,27 +294,29 @@
     function exibirProdutos(produtos) {
         if (produtos.length === 0) {
             $('#listaProdutos').html(`
-                <div class="alert alert-info">
-                    <h4><span class="glyphicon glyphicon-info-sign"></span> Nenhum produto disponível</h4>
-                    <p>Não há produtos à venda no momento. Volte mais tarde!</p>
+                <div class="alert alert-warning text-center">
+                    <h4><span class="glyphicon glyphicon-search"></span> Nenhum produto encontrado</h4>
+                    <p>Tente ajustar os filtros de busca ou limpar todos os filtros.</p>
                 </div>
             `);
             return;
         }
 
-        let html = '';
+        let html = '<div class="alert alert-success"><strong>' + produtos.length + '</strong> produto(s) encontrado(s)</div>';
+        
         produtos.forEach(function(produto) {
             html += `
-                <div class="produto-card">
+                <div class="produto-card" id="produto_${produto.id_produto}">
                     <div class="produto-nome">${produto.nome}</div>
                     <div class="produto-loja">
                         <span class="glyphicon glyphicon-home"></span> Vendido por: ${produto.nome_loja}
                     </div>
                     ${produto.descricao ? '<div class="produto-descricao">' + produto.descricao + '</div>' : ''}
                     <div class="produto-preco">R$ ${parseFloat(produto.preco).toFixed(2).replace('.', ',')}</div>
-                    <div class="produto-estoque">
+                    <div class="produto-estoque" id="estoque_${produto.id_produto}">
                         <span class="glyphicon glyphicon-list-alt"></span> 
-                        ${produto.estoque} ${produto.estoque == 1 ? 'unidade' : 'unidades'} disponível
+                        <span id="estoque_numero_${produto.id_produto}">${produto.estoque}</span> 
+                        ${produto.estoque == 1 ? 'unidade' : 'unidades'} disponível
                     </div>
                     <div>
                         <label for="qtd_${produto.id_produto}">Quantidade:</label>
@@ -211,9 +363,8 @@
             success: function(data) {
                 if (data.sucesso) {
                     exibirAviso(data.mensagem, 'alerta', 'SUCESSO');
-                    // Atualizar badge do carrinho
                     $('#quantidade_carrinho').text(data.quantidade_carrinho);
-                    // Resetar quantidade para 1
+                    atualizarEstoqueNaTela(id_produto, quantidade);
                     $('#qtd_' + id_produto).val(1);
                 } else {
                     exibirAviso(data.mensagem, 'alerta', 'ERRO');
@@ -223,6 +374,29 @@
                 exibirAviso('Erro ao adicionar ao carrinho', 'alerta');
             }
         });
+    }
+
+    // Atualizar estoque na tela em tempo real
+    function atualizarEstoqueNaTela(id_produto, quantidade_adicionada) {
+        let produto = produtosData.find(p => p.id_produto == id_produto);
+        
+        if (produto) {
+            let novo_estoque = produto.estoque - quantidade_adicionada;
+            produto.estoque = novo_estoque;
+            
+            $('#estoque_' + id_produto).html(`
+                <span class="glyphicon glyphicon-list-alt"></span> 
+                <span id="estoque_numero_${id_produto}">${novo_estoque}</span> 
+                ${novo_estoque == 1 ? 'unidade' : 'unidades'} disponível
+            `);
+            
+            $('#qtd_' + id_produto).attr('max', novo_estoque);
+            
+            if (novo_estoque <= 0) {
+                $('#qtd_' + id_produto).prop('disabled', true);
+                $('#produto_' + id_produto + ' button').prop('disabled', true).html('<span class="glyphicon glyphicon-remove"></span> Sem Estoque');
+            }
+        }
     }
 
     // Atualizar badge do carrinho
@@ -342,7 +516,6 @@
             cache: false,
             success: function(data) {
                 if (data.sucesso) {
-                    // Atualizar total
                     $('#totalCarrinho').text(parseFloat(data.total).toFixed(2).replace('.', ','));
                 } else {
                     exibirAviso(data.mensagem, 'alertaCarrinho', 'ERRO');
@@ -371,12 +544,9 @@
             success: function(data) {
                 if (data.sucesso) {
                     exibirAviso(data.mensagem, 'alertaCarrinho', 'SUCESSO');
-                    // Atualizar badge
                     $('#quantidade_carrinho').text(data.quantidade_carrinho);
-                    // Remover item da tela
                     $('#item_' + id_carrinho_item).fadeOut(400, function() {
                         $(this).remove();
-                        // Recarregar carrinho
                         carregarCarrinho();
                     });
                 } else {
@@ -405,9 +575,8 @@
             success: function(data) {
                 if (data.sucesso) {
                     exibirAviso(data.mensagem, 'alertaCarrinho', 'SUCESSO');
-                    // Atualizar badge
                     $('#quantidade_carrinho').text('0');
-                    // Recarregar carrinho
+                    carregarProdutos();
                     setTimeout(function() {
                         carregarCarrinho();
                         $('#btnFinalizar').prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Finalizar Compra');

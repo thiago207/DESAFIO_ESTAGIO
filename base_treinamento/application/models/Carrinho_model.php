@@ -7,10 +7,14 @@ class Carrinho_model extends CI_Model {
 	 * Buscar ou criar carrinho do usuário
 	 */
 	public function buscarOuCriarCarrinho($id_usuario){
-		// Verificar se já existe um carrinho para o usuário
+		// Verificar se já existe um carrinho ATIVO para o usuário
 		$this->db->select('id_carrinho');
 		$this->db->from('carrinho');
 		$this->db->where('id_usuario', $id_usuario);
+		
+		// Verificar se o carrinho tem uma venda associada
+		$this->db->where('id_carrinho NOT IN (SELECT id_carrinho FROM venda)', NULL, FALSE);
+		
 		$carrinho = $this->db->get()->row_array();
 		
 		if ($carrinho) {
@@ -164,11 +168,7 @@ class Carrinho_model extends CI_Model {
 	}
 
 	/**
-	 * Limpar carrinho após compra
+	 * REMOVIDO: Não limpar carrinho mais!
+	 * Agora cria um NOVO carrinho automaticamente
 	 */
-	public function limparCarrinho($id_carrinho){
-		$this->db->where('id_carrinho', $id_carrinho);
-		$this->db->delete('carrinho_item');
-		return true;
-	}
 }

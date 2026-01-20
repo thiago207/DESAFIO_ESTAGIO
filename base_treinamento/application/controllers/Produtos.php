@@ -23,6 +23,16 @@ class Produtos extends CI_Controller {
 	}
 
 	/**
+	 * Página de cadastro de produto
+	 */
+	public function cadastrar(){
+		$dados = [
+			'title' => 'Cadastrar Produto'
+		];
+		$this->template->load('cadastrarProduto', $dados);
+	}
+
+	/**
 	 * AJAX - Listar produtos da loja
 	 */
 	public function ajax_listar(){

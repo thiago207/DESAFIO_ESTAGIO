@@ -84,10 +84,10 @@
                     <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><?=$nome_usuario?> <span class="caret"></span></a>
                     <ul class="dropdown-menu">
                         <?php if($tipo_acesso == '1'): ?>
-                            <li><a href="#">Pedidos</a></li>
+                            <li><a href="<?=base_url('cliente/pedidos')?>">Pedidos</a></li>
                         <?php elseif($tipo_acesso == '2'): ?>
-                            <li><a href="#">Produtos</a></li>
-                            <li><a href="#">Vendas</a></li>
+                            <li><a href="<?=base_url('produtos')?>">Produtos</a></li>
+                            <li><a href="<?=base_url('loja/vendas')?>">Vendas</a></li>
                         <?php endif; ?>
                         <li role="separator" class="divider"></li>
                         <li><a href="<?=base_url('login/logout')?>">Logout</a></li>

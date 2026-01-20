@@ -23,10 +23,91 @@ class Cliente extends CI_Controller {
 	}
 
 	/**
-	 * AJAX - Listar todos os produtos disponíveis
+	 * Página de pedidos
+	 */
+	public function pedidos(){
+		$dados = [
+			'title' => 'Meus Pedidos'
+		];
+		$this->template->load('pedidos', $dados);
+	}
+
+	/**
+	 * AJAX - Listar lojas
+	 */
+	public function ajax_listarLojas(){
+		$this->db->select('id_usuario, nome_usuario');
+		$this->db->from('usuario');
+		$this->db->where('tipo_acesso', '2'); // Apenas lojas
+		$this->db->order_by('nome_usuario', 'ASC');
+		$lojas = $this->db->get()->result_array();
+		echo json_encode($lojas);
+	}
+
+	/**
+	 * AJAX - Listar categorias
+	 */
+	public function ajax_listarCategorias(){
+		$this->db->select('id_categoria, nome');
+		$this->db->from('categoria');
+		$this->db->order_by('nome', 'ASC');
+		$categorias = $this->db->get()->result_array();
+		echo json_encode($categorias);
+	}
+
+	/**
+	 * AJAX - Listar pedidos do cliente
+	 */
+	public function ajax_listarPedidos(){
+		$id_usuario = $this->session->userdata('id_usuario');
+		
+		$this->db->select('v.id_venda, v.data_venda, c.id_carrinho');
+		$this->db->from('venda v');
+		$this->db->join('carrinho c', 'c.id_carrinho = v.id_carrinho');
+		$this->db->where('c.id_usuario', $id_usuario);
+		$this->db->order_by('v.data_venda', 'DESC');
+		$vendas = $this->db->get()->result_array();
+		
+		$pedidos = [];
+		foreach ($vendas as $venda) {
+			$this->db->select('ci.quantidade, p.nome as nome_produto, p.preco, u.nome_usuario as nome_loja');
+			$this->db->from('carrinho_item ci');
+			$this->db->join('produto p', 'p.id_produto = ci.id_produto');
+			$this->db->join('usuario u', 'u.id_usuario = p.id_usuario_loja');
+			$this->db->where('ci.id_carrinho', $venda['id_carrinho']);
+			$itens = $this->db->get()->result_array();
+			
+			$total = 0;
+			foreach ($itens as $item) {
+				$total += $item['quantidade'] * $item['preco'];
+			}
+			
+			$pedidos[] = [
+				'id_venda' => $venda['id_venda'],
+				'data_venda' => $venda['data_venda'],
+				'itens' => $itens,
+				'total' => $total
+			];
+		}
+		
+		echo json_encode($pedidos);
+	}
+
+	/**
+	 * AJAX - Listar todos os produtos disponíveis COM FILTROS
 	 */
 	public function ajax_listarProdutos(){
-		$produtos = $this->produtos_model->listarProdutosDisponiveis();
+		// Capturar filtros
+		$filtros = [
+			'nome' => $this->input->get('nome'),
+			'id_loja' => $this->input->get('id_loja'),
+			'id_categoria' => $this->input->get('id_categoria'),
+			'preco_min' => $this->input->get('preco_min'),
+			'preco_max' => $this->input->get('preco_max'),
+			'apenas_estoque' => $this->input->get('apenas_estoque')
+		];
+
+		$produtos = $this->produtos_model->listarProdutosDisponiveisComFiltros($filtros);
 		echo json_encode($produtos);
 	}
 
@@ -41,14 +122,12 @@ class Cliente extends CI_Controller {
 		$resultado['sucesso'] = false;
 		$resultado['mensagem'] = "";
 
-		// Validações
 		if (!$id_produto || !$quantidade || $quantidade <= 0) {
 			$resultado['mensagem'] = "Dados inválidos";
 			echo json_encode($resultado);
 			return;
 		}
 
-		// Verificar estoque
 		$produto = $this->produtos_model->buscarProdutoPorId($id_produto);
 		if (!$produto || $produto['estoque'] < $quantidade) {
 			$resultado['mensagem'] = "Estoque insuficiente";
@@ -56,10 +135,7 @@ class Cliente extends CI_Controller {
 			return;
 		}
 
-		// Buscar ou criar carrinho
 		$id_carrinho = $this->carrinho_model->buscarOuCriarCarrinho($id_usuario);
-
-		// Adicionar ao carrinho
 		$resultado['sucesso'] = $this->carrinho_model->adicionarProduto($id_carrinho, $id_produto, $quantidade);
 		
 		if ($resultado['sucesso']) {
@@ -91,12 +167,10 @@ class Cliente extends CI_Controller {
 		$itens = $this->carrinho_model->listarItensCarrinho($id_carrinho);
 		$total = $this->carrinho_model->calcularTotal($id_carrinho);
 		
-		$resultado = [
+		echo json_encode([
 			'itens' => $itens,
 			'total' => $total
-		];
-		
-		echo json_encode($resultado);
+		]);
 	}
 
 	/**
@@ -116,14 +190,12 @@ class Cliente extends CI_Controller {
 			
 			if ($resultado['sucesso']) {
 				$resultado['mensagem'] = "Quantidade atualizada!";
-				
-				// Retornar novo total
 				$id_usuario = $this->session->userdata('id_usuario');
 				$id_carrinho = $this->carrinho_model->buscarOuCriarCarrinho($id_usuario);
 				$resultado['total'] = $this->carrinho_model->calcularTotal($id_carrinho);
 			} else {
 				$resultado['mensagem'] = "Erro ao atualizar";
-			}
+            }
 		}
 
 		echo json_encode($resultado);
@@ -139,8 +211,6 @@ class Cliente extends CI_Controller {
 		
 		if ($resultado['sucesso']) {
 			$resultado['mensagem'] = "Item removido do carrinho!";
-			
-			// Retornar quantidade atualizada e novo total
 			$id_usuario = $this->session->userdata('id_usuario');
 			$id_carrinho = $this->carrinho_model->buscarOuCriarCarrinho($id_usuario);
 			$resultado['quantidade_carrinho'] = $this->carrinho_model->contarItensCarrinho($id_carrinho);
@@ -158,14 +228,7 @@ class Cliente extends CI_Controller {
 	public function ajax_finalizarCompra(){
 		$id_usuario = $this->session->userdata('id_usuario');
 		$id_carrinho = $this->carrinho_model->buscarOuCriarCarrinho($id_usuario);
-		
 		$resultado = $this->carrinho_model->finalizarCompra($id_carrinho);
-		
-		if ($resultado['sucesso']) {
-			// Limpar carrinho
-			$this->carrinho_model->limparCarrinho($id_carrinho);
-		}
-		
 		echo json_encode($resultado);
 	}
 }

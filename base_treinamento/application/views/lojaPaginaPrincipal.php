@@ -35,26 +35,34 @@
         border-radius: 5px;
         margin-bottom: 20px;
     }
+    .header-com-botao {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
 </style>
 
 <div class="container panel-produtos">
-    <div class="page-header">
-        <h1><span class="glyphicon glyphicon-list-alt"></span> Gerenciar Produtos</h1>
+    <div class="header-com-botao">
+        <h1><span class="glyphicon glyphicon-list-alt"></span> Meus Produtos</h1>
+        <a href="<?=base_url('produtos/cadastrar')?>" class="btn btn-primary btn-lg">
+            <span class="glyphicon glyphicon-plus"></span> Cadastrar Novo Produto
+        </a>
     </div>
 
     <div id="alerta"></div>
 
-    <!-- FORMULÁRIO DE CADASTRO/EDIÇÃO -->
-    <div class="panel panel-primary">
+    <!-- FORMULÁRIO DE EDIÇÃO (só aparece quando clica em Editar) -->
+    <div class="panel panel-warning" id="painelEdicao" style="display:none;">
         <div class="panel-heading">
-            <h3 class="panel-title" id="tituloForm">
-                <span class="glyphicon glyphicon-plus"></span> Cadastrar Novo Produto
+            <h3 class="panel-title">
+                <span class="glyphicon glyphicon-pencil"></span> Editar Produto
             </h3>
         </div>
         <div class="panel-body">
             <form id="formProduto">
                 <input type="hidden" id="id_produto" value="">
-                <input type="hidden" id="modo_edicao" value="0">
 
                 <div class="row">
                     <div class="col-md-6">
@@ -96,11 +104,11 @@
                 </div>
 
                 <div class="text-right">
-                    <button type="button" class="btn btn-default" onclick="cancelarEdicao()" id="btnCancelar" style="display:none;">
+                    <button type="button" class="btn btn-default" onclick="cancelarEdicao()">
                         <span class="glyphicon glyphicon-remove"></span> Cancelar
                     </button>
-                    <button type="submit" class="btn btn-success" id="btnSalvar">
-                        <span class="glyphicon glyphicon-floppy-disk"></span> <span id="textoSalvar">Cadastrar Produto</span>
+                    <button type="submit" class="btn btn-success">
+                        <span class="glyphicon glyphicon-floppy-disk"></span> Salvar Alterações
                     </button>
                 </div>
             </form>
@@ -109,9 +117,6 @@
 
     <!-- LISTA DE PRODUTOS -->
     <div class="panel panel-default">
-        <div class="panel-heading">
-            <h3 class="panel-title"><span class="glyphicon glyphicon-th-list"></span> Meus Produtos</h3>
-        </div>
         <div class="panel-body">
             <div id="listaProdutos">
                 <div class="text-center">
@@ -148,9 +153,17 @@
     function exibirProdutos(produtos) {
         if (produtos.length === 0) {
             $('#listaProdutos').html(`
-                <div class="alert alert-info">
-                    <h4><span class="glyphicon glyphicon-info-sign"></span> Nenhum produto cadastrado</h4>
-                    <p>Comece cadastrando seu primeiro produto usando o formulário acima!</p>
+                <div class="text-center" style="padding: 80px 20px;">
+                    <h2 style="color: #999;">
+                        <span class="glyphicon glyphicon-inbox" style="font-size: 60px; display: block; margin-bottom: 20px;"></span>
+                        Nenhum produto cadastrado ainda
+                    </h2>
+                    <p style="font-size: 16px; color: #666; margin: 20px 0;">
+                        Comece cadastrando seu primeiro produto para começar a vender!
+                    </p>
+                    <a href="<?=base_url('produtos/cadastrar')?>" class="btn btn-primary btn-lg">
+                        <span class="glyphicon glyphicon-plus"></span> Cadastrar Primeiro Produto
+                    </a>
                 </div>
             `);
             return;
@@ -210,7 +223,7 @@
         return true;
     }
 
-    // Submit do formulário
+    // Submit do formulário (SOMENTE EDIÇÃO)
     $('#formProduto').on('submit', function(e) {
         e.preventDefault();
         
@@ -218,10 +231,8 @@
             return;
         }
 
-        let modoEdicao = $('#modo_edicao').val() === '1';
-        let url = modoEdicao ? "<?=base_url('produtos/ajax_editar')?>" : "<?=base_url('produtos/ajax_cadastrar')?>";
-        
         let dados = {
+            id_produto: $('#id_produto').val(),
             nome: $("#nome").val().trim(),
             custo: $("#custo").val() || 0,
             preco: $("#preco").val(),
@@ -229,12 +240,8 @@
             descricao: $("#descricao").val().trim()
         };
 
-        if (modoEdicao) {
-            dados.id_produto = $('#id_produto').val();
-        }
-
         $.ajax({
-            url: url,
+            url: "<?=base_url('produtos/ajax_editar')?>",
             type: "POST",
             dataType: "json",
             data: dados,
@@ -242,7 +249,7 @@
             success: function(data) {
                 if (data.sucesso) {
                     exibirAviso(data.mensagem, 'alerta', 'SUCESSO');
-                    limparFormulario();
+                    cancelarEdicao();
                     carregarProdutos();
                 } else {
                     exibirAviso(data.mensagem, 'alerta', 'ERRO');
@@ -270,13 +277,12 @@
                     $('#preco').val(produto.preco);
                     $('#estoque').val(produto.estoque);
                     $('#descricao').val(produto.descricao);
-                    $('#modo_edicao').val('1');
                     
-                    $('#tituloForm').html('<span class="glyphicon glyphicon-pencil"></span> Editar Produto');
-                    $('#textoSalvar').text('Salvar Alterações');
-                    $('#btnCancelar').show();
+                    // Mostrar painel de edição
+                    $('#painelEdicao').slideDown();
                     
-                    $('html, body').animate({ scrollTop: 0 }, 500);
+                    // Rolar para o formulário
+                    $('html, body').animate({ scrollTop: $('#painelEdicao').offset().top - 20 }, 500);
                 }
             },
             error: function() {
@@ -287,17 +293,9 @@
 
     // Cancelar edição
     function cancelarEdicao() {
-        limparFormulario();
-    }
-
-    // Limpar formulário
-    function limparFormulario() {
         $('#formProduto')[0].reset();
         $('#id_produto').val('');
-        $('#modo_edicao').val('0');
-        $('#tituloForm').html('<span class="glyphicon glyphicon-plus"></span> Cadastrar Novo Produto');
-        $('#textoSalvar').text('Cadastrar Produto');
-        $('#btnCancelar').hide();
+        $('#painelEdicao').slideUp();
     }
 
     // Confirmar deleção
@@ -320,7 +318,6 @@
                     exibirAviso(data.mensagem, 'alerta', 'SUCESSO');
                     $('#produto_' + id_produto).fadeOut(400, function() {
                         $(this).remove();
-                        // Recarregar lista se não houver mais produtos
                         if ($('.produto-card').length === 0) {
                             carregarProdutos();
                         }
