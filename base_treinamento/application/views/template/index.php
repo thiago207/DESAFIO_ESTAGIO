@@ -87,6 +87,7 @@
                             <li><a href="<?=base_url('cliente/pedidos')?>">Pedidos</a></li>
                         <?php elseif($tipo_acesso == '2'): ?>
                             <li><a href="<?=base_url('produtos')?>">Produtos</a></li>
+                            <li><a href="<?=base_url('cupons')?>">🎫 Cupons</a></li>
                             <li><a href="<?=base_url('loja/vendas')?>">Vendas</a></li>
                         <?php endif; ?>
                         <li role="separator" class="divider"></li>

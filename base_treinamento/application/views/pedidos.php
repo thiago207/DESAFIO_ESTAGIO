@@ -1,4 +1,26 @@
 <style>
+        .subtotal-linha, .total-linha, .cupom-linha {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+    }
+
+    .cupom-linha {
+        color: #27ae60;
+        font-weight: 500;
+        border-top: 1px dashed #ddd;
+        border-bottom: 1px dashed #ddd;
+        margin: 5px 0;
+    }
+
+    .total-linha {
+        font-size: 20px;
+        font-weight: bold;
+        color: #27ae60;
+        border-top: 2px solid #eee;
+        padding-top: 10px;
+        margin-top: 5px;
+    }
     .pedidos-container {
         max-width: 1400px;
         margin: 20px auto;
@@ -87,15 +109,31 @@
         });
     }
 
+    // Formatar data
+    function formatarData(dataString) {
+        let data = new Date(dataString);
+        let dia = String(data.getDate()).padStart(2, '0');
+        let mes = String(data.getMonth() + 1).padStart(2, '0');
+        let ano = data.getFullYear();
+        let horas = String(data.getHours()).padStart(2, '0');
+        let minutos = String(data.getMinutes()).padStart(2, '0');
+        return `${dia}/${mes}/${ano} às ${horas}:${minutos}`;
+    }
+
     // Exibir pedidos na tela
     function exibirPedidos(pedidos) {
         if (pedidos.length === 0) {
             $('#listaPedidos').html(`
-                <div class="alert alert-info text-center">
-                    <h3><span class="glyphicon glyphicon-info-sign"></span> Você não tem pedidos</h3>
-                    <p>Quando você finalizar uma compra, seus pedidos aparecerão aqui!</p>
-                    <a href="<?=base_url('cliente')?>" class="btn btn-primary">
-                        <span class="glyphicon glyphicon-shopping-cart"></span> Ir para Produtos
+                <div class="text-center" style="padding: 60px 20px;">
+                    <h2 style="color: #999;">
+                        <span class="glyphicon glyphicon-inbox" style="font-size: 60px; display: block; margin-bottom: 20px;"></span>
+                        Você ainda não fez nenhum pedido
+                    </h2>
+                    <p style="font-size: 16px; color: #666; margin: 20px 0;">
+                        Comece adicionando produtos ao carrinho!
+                    </p>
+                    <a href="<?=base_url()?>" class="btn btn-primary btn-lg">
+                        <span class="glyphicon glyphicon-shopping-cart"></span> Ver Produtos
                     </a>
                 </div>
             `);
@@ -104,72 +142,82 @@
 
         let html = '';
         pedidos.forEach(function(pedido) {
+            let status = 'success';
+            let status_texto = 'Finalizado';
+            
             html += `
                 <div class="pedido-card">
                     <div class="pedido-header">
                         <div>
-                            <div class="pedido-numero">
-                                Pedido #${pedido.id_venda}
-                            </div>
-                            <div class="pedido-data">
-                                <span class="glyphicon glyphicon-calendar"></span> 
-                                ${formatarData(pedido.data_venda)}
-                            </div>
+                            <strong>Pedido #${pedido.id_venda}</strong><br>
+                            <small><span class="glyphicon glyphicon-calendar"></span> ${formatarData(pedido.data_venda)}</small>
                         </div>
                         <div>
-                            <span class="label label-success label-status">Finalizado</span>
+                            <span class="label label-${status}">${status_texto}</span>
                         </div>
                     </div>
                     
                     <div class="pedido-itens">
                         <h4>Itens do Pedido:</h4>
             `;
-
-            // Listar itens do pedido
+            
             pedido.itens.forEach(function(item) {
                 let subtotal = item.quantidade * item.preco;
                 html += `
                     <div class="pedido-item">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <strong>${item.nome_produto}</strong><br>
-                                <small class="text-muted">Loja: ${item.nome_loja}</small>
-                            </div>
-                            <div class="col-md-2 text-center">
-                                <span class="label label-default">${item.quantidade}x</span>
-                            </div>
-                            <div class="col-md-2 text-center">
-                                R$ ${parseFloat(item.preco).toFixed(2).replace('.', ',')}
-                            </div>
-                            <div class="col-md-2 text-right">
-                                <strong>R$ ${subtotal.toFixed(2).replace('.', ',')}</strong>
-                            </div>
+                        <div>
+                            <strong>${item.nome_produto}</strong><br>
+                            <small class="text-muted">Loja: ${item.nome_loja}</small><br>
+                            <small>R$ ${parseFloat(item.preco).toFixed(2).replace('.', ',')} × ${item.quantidade}</small>
+                        </div>
+                        <div class="text-right">
+                            <strong>R$ ${subtotal.toFixed(2).replace('.', ',')}</strong>
                         </div>
                     </div>
                 `;
             });
-
+            
+            html += `</div>`;
+            
+            // Mostrar resumo do pedido
+            html += `<div class="pedido-total">`;
+            
+            // Subtotal
             html += `
-                    </div>
-                    <div class="pedido-total">
-                        Total: R$ ${parseFloat(pedido.total).toFixed(2).replace('.', ',')}
-                    </div>
+                <div class="subtotal-linha">
+                    <span>Subtotal:</span>
+                    <span>R$ ${parseFloat(pedido.subtotal).toFixed(2).replace('.', ',')}</span>
                 </div>
             `;
+            
+            // Cupom (se foi usado)
+            if (pedido.valor_desconto > 0 && pedido.cupom) {
+                let cupom_texto = pedido.cupom.tipo == '%' 
+                    ? pedido.cupom.desconto + '%' 
+                    : 'R$ ' + parseFloat(pedido.cupom.desconto).toFixed(2).replace('.', ',');
+                
+                html += `
+                    <div class="cupom-linha">
+                        <span>
+                            <span class="glyphicon glyphicon-tags"></span> 
+                            Cupom: <strong>${pedido.cupom.nome}</strong> (${cupom_texto})
+                        </span>
+                        <span>-R$ ${parseFloat(pedido.valor_desconto).toFixed(2).replace('.', ',')}</span>
+                    </div>
+                `;
+            }
+            
+            // Total
+            html += `
+                <div class="total-linha">
+                    <span>Total:</span>
+                    <span>R$ ${parseFloat(pedido.total).toFixed(2).replace('.', ',')}</span>
+                </div>
+            `;
+            
+            html += `</div></div>`;
         });
 
         $('#listaPedidos').html(html);
-    }
-
-    // Formatar data brasileira
-    function formatarData(dataString) {
-        let data = new Date(dataString);
-        let dia = String(data.getDate()).padStart(2, '0');
-        let mes = String(data.getMonth() + 1).padStart(2, '0');
-        let ano = data.getFullYear();
-        let horas = String(data.getHours()).padStart(2, '0');
-        let minutos = String(data.getMinutes()).padStart(2, '0');
-        
-        return `${dia}/${mes}/${ano} às ${horas}:${minutos}`;
     }
 </script>

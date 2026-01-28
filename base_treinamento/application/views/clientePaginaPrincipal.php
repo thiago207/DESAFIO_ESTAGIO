@@ -179,6 +179,37 @@
                     </div>
                 </div>
             </div>
+             <!-- ========== CUPOM ========== -->
+        <div id="secaoCupom" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #eee;">
+            <h4><span class="glyphicon glyphicon-tags"></span> Cupom de Desconto</h4>
+            
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="campo_cupom" placeholder="Digite o código do cupom" style="text-transform: uppercase;">
+                        <span class="input-group-btn">
+                            <button class="btn btn-primary" type="button" onclick="aplicarCupom()">
+                                <span class="glyphicon glyphicon-ok"></span> Aplicar
+                            </button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="cupomAplicado" style="display: none; margin-top: 15px;">
+                <div class="alert alert-success">
+                    <button type="button" class="close" onclick="removerCupom()">&times;</button>
+                    <strong><span class="glyphicon glyphicon-ok-circle"></span> Cupom aplicado!</strong>
+                    <div style="margin-top: 5px;">
+                        Código: <strong id="cupom_codigo"></strong> | 
+                        Desconto: <strong id="cupom_desconto_texto"></strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- ========== FIM DO CUPOM HTML ========== -->
+        
+    </div> 
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Continuar Comprando</button>
                 <button type="button" class="btn btn-success btn-lg" onclick="finalizarCompra()" id="btnFinalizar">
@@ -435,6 +466,7 @@
     }
 
     // Exibir itens do carrinho
+    // Exibir itens do carrinho
     function exibirCarrinho(data) {
         let itens = data.itens;
         let total = data.total;
@@ -447,16 +479,18 @@
                 </div>
             `);
             $('#btnFinalizar').prop('disabled', true);
+            $('#secaoCupom').hide(); // NOVA LINHA
             return;
         }
 
         $('#btnFinalizar').prop('disabled', false);
+        $('#secaoCupom').show(); // NOVA LINHA
 
         let html = '';
         itens.forEach(function(item) {
             let subtotal = item.quantidade * item.preco;
             html += `
-                <div class="carrinho-item" id="item_${item.id_carrinho_item}">
+                <div class="carrinho-item" id="item_${item.id_carrinho_item}" data-preco="${item.preco}">
                     <div class="row">
                         <div class="col-md-6">
                             <strong>${item.nome}</strong><br>
@@ -466,12 +500,12 @@
                         <div class="col-md-3">
                             <label>Quantidade:</label>
                             <input type="number" 
-                                   class="form-control input-sm" 
-                                   id="qtd_item_${item.id_carrinho_item}" 
-                                   value="${item.quantidade}" 
-                                   min="1" 
-                                   max="${item.estoque}"
-                                   onchange="atualizarQuantidadeItem(${item.id_carrinho_item})">
+                                class="form-control input-sm" 
+                                id="qtd_item_${item.id_carrinho_item}" 
+                                value="${item.quantidade}" 
+                                min="1" 
+                                max="${item.estoque}"
+                                onchange="atualizarQuantidadeItem(${item.id_carrinho_item})">
                             <small class="text-muted">Máx: ${item.estoque}</small>
                         </div>
                         <div class="col-md-2 text-right">
@@ -487,13 +521,14 @@
             `;
         });
 
-        html += `
-            <div class="carrinho-total">
-                Total: R$ <span id="totalCarrinho">${parseFloat(total).toFixed(2).replace('.', ',')}</span>
-            </div>
-        `;
-
         $('#itensCarrinho').html(html);
+        
+        // NOVAS LINHAS
+        if ($('#totalCarrinhoContainer').length === 0) {
+            $('#itensCarrinho').after('<div id="totalCarrinhoContainer"></div>');
+        }
+        atualizarTotalComDesconto();
+        // FIM DAS NOVAS LINHAS
     }
 
     // Atualizar quantidade de item
@@ -560,36 +595,189 @@
     }
 
     // Finalizar compra
-    function finalizarCompra() {
-        if (!confirm('Deseja finalizar a compra? Esta ação não pode ser desfeita.')) {
+function finalizarCompra() {
+    if (!confirm('Deseja finalizar a compra? Esta ação não pode ser desfeita.')) {
+        return;
+    }
+
+    $('#btnFinalizar').prop('disabled', true).html('<i class="glyphicon glyphicon-refresh glyphicon-spin"></i> Processando...');
+
+    // NOVA PARTE: Adicionar dados do cupom
+    let dados = {};
+    if (cupomAplicado) {
+        dados.id_cupom = cupomAplicado.id_cupom;
+        dados.valor_desconto = cupomAplicado.valor_desconto;
+    }
+    // FIM DA NOVA PARTE
+
+    $.ajax({
+        url: "<?=base_url('cliente/ajax_finalizarCompra')?>",
+        type: "POST",
+        dataType: "json",
+        data: dados, // MODIFICADO: era "cache: false" direto
+        cache: false,
+        success: function(data) {
+            if (data.sucesso) {
+                exibirAviso(data.mensagem, 'alertaCarrinho', 'SUCESSO');
+                $('#quantidade_carrinho').text('0');
+                
+                // NOVAS LINHAS: Limpar cupom
+                cupomAplicado = null;
+                $('#cupomAplicado').hide();
+                $('#campo_cupom').val('').prop('disabled', false);
+                // FIM DAS NOVAS LINHAS
+                
+                carregarProdutos();
+                setTimeout(function() {
+                    carregarCarrinho();
+                    $('#btnFinalizar').prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Finalizar Compra');
+                }, 2000);
+            } else {
+                exibirAviso(data.mensagem, 'alertaCarrinho', 'ERRO');
+                $('#btnFinalizar').prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Finalizar Compra');
+            }
+        },
+        error: function() {
+            exibirAviso('Erro ao finalizar compra', 'alertaCarrinho');
+            $('#btnFinalizar').prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Finalizar Compra');
+        }
+    });
+}
+
+  // ========== FUNÇÕES DO CUPOM ==========
+    
+    // Variável global para armazenar cupom aplicado
+    let cupomAplicado = null;
+
+    // Aplicar cupom
+    function aplicarCupom() {
+        let codigo = $('#campo_cupom').val().trim().toUpperCase();
+        
+        console.log('🎫 Aplicando cupom:', codigo); // DEBUG
+        
+        if (!codigo) {
+            exibirAviso('Digite o código do cupom', 'alertaCarrinho', 'AVISO');
             return;
         }
-
-        $('#btnFinalizar').prop('disabled', true).html('<i class="glyphicon glyphicon-refresh glyphicon-spin"></i> Processando...');
-
+        
+        // Calcular total do carrinho
+        let valor_carrinho = 0;
+        $('.carrinho-item').each(function() {
+            let quantidade = parseInt($(this).find('input[type="number"]').val());
+            let preco = parseFloat($(this).data('preco'));
+            valor_carrinho += quantidade * preco;
+        });
+        
+        console.log('💰 Valor do carrinho:', valor_carrinho); // DEBUG
+        
+        if (valor_carrinho <= 0) {
+            exibirAviso('Adicione produtos ao carrinho primeiro', 'alertaCarrinho', 'AVISO');
+            return;
+        }
+        
+        console.log('📤 Enviando requisição AJAX...'); // DEBUG
+        
         $.ajax({
-            url: "<?=base_url('cliente/ajax_finalizarCompra')?>",
+            url: "<?=base_url('cliente/ajax_validarCupom')?>",
             type: "POST",
             dataType: "json",
+            data: {
+                codigo: codigo,
+                valor_carrinho: valor_carrinho
+            },
             cache: false,
             success: function(data) {
+                console.log('📥 Resposta recebida:', data); // DEBUG
+                
                 if (data.sucesso) {
+                    cupomAplicado = {
+                        id_cupom: data.cupom.id_cupom,
+                        codigo: data.cupom.codigo,
+                        tipo: data.cupom.tipo,
+                        desconto: data.cupom.desconto,
+                        valor_desconto: data.valor_desconto
+                    };
+                    
+                    console.log('✅ Cupom aplicado:', cupomAplicado); // DEBUG
+                    
+                    exibirCupomAplicado();
+                    atualizarTotalComDesconto();
                     exibirAviso(data.mensagem, 'alertaCarrinho', 'SUCESSO');
-                    $('#quantidade_carrinho').text('0');
-                    carregarProdutos();
-                    setTimeout(function() {
-                        carregarCarrinho();
-                        $('#btnFinalizar').prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Finalizar Compra');
-                    }, 2000);
                 } else {
+                    console.log('❌ Cupom inválido:', data.mensagem); // DEBUG
                     exibirAviso(data.mensagem, 'alertaCarrinho', 'ERRO');
-                    $('#btnFinalizar').prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Finalizar Compra');
                 }
             },
-            error: function() {
-                exibirAviso('Erro ao finalizar compra', 'alertaCarrinho');
-                $('#btnFinalizar').prop('disabled', false).html('<span class="glyphicon glyphicon-ok"></span> Finalizar Compra');
+            error: function(xhr, status, error) {
+                console.log('Erro AJAX:', xhr.responseText); // DEBUG
+                exibirAviso('Erro ao validar cupom', 'alertaCarrinho');
             }
         });
     }
+
+    // Exibir cupom aplicado
+    function exibirCupomAplicado() {
+        if (!cupomAplicado) return;
+        
+        $('#cupom_codigo').text(cupomAplicado.codigo);
+        
+        let desconto_texto = '';
+        if (cupomAplicado.tipo == '%') {
+            desconto_texto = cupomAplicado.desconto + '%';
+        } else {
+            desconto_texto = 'R$ ' + parseFloat(cupomAplicado.desconto).toFixed(2).replace('.', ',');
+        }
+        $('#cupom_desconto_texto').text(desconto_texto);
+        
+        $('#cupomAplicado').slideDown();
+        $('#campo_cupom').prop('disabled', true);
+    }
+
+    // Remover cupom
+    function removerCupom() {
+        cupomAplicado = null;
+        $('#cupomAplicado').slideUp();
+        $('#campo_cupom').val('').prop('disabled', false);
+        atualizarTotalComDesconto();
+    }
+
+    // Atualizar total com desconto
+    function atualizarTotalComDesconto() {
+        let subtotal = 0;
+        $('.carrinho-item').each(function() {
+            let quantidade = parseInt($(this).find('input[type="number"]').val());
+            let preco = parseFloat($(this).data('preco'));
+            subtotal += quantidade * preco;
+        });
+        
+        let total = subtotal;
+        let html_total = '';
+        
+        if (cupomAplicado && cupomAplicado.valor_desconto > 0) {
+            total = subtotal - cupomAplicado.valor_desconto;
+            
+            html_total = `
+                <div style="text-align: right; margin-top: 15px;">
+                    <div style="font-size: 16px; color: #666;">
+                        Subtotal: R$ ${subtotal.toFixed(2).replace('.', ',')}
+                    </div>
+                    <div style="font-size: 16px; color: #27ae60;">
+                        Desconto: -R$ ${cupomAplicado.valor_desconto.toFixed(2).replace('.', ',')}
+                    </div>
+                    <div style="font-size: 24px; font-weight: bold; color: #27ae60; border-top: 2px solid #eee; padding-top: 10px; margin-top: 5px;">
+                        Total: R$ ${total.toFixed(2).replace('.', ',')}
+                    </div>
+                </div>
+            `;
+        } else {
+            html_total = `
+                <div class="carrinho-total">
+                    Total: R$ <span id="totalCarrinho">${total.toFixed(2).replace('.', ',')}</span>
+                </div>
+            `;
+        }
+        
+        $('#totalCarrinhoContainer').html(html_total);
+    }
+    
 </script>

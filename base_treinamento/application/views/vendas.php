@@ -92,9 +92,14 @@
     function exibirVendas(vendas) {
         if (vendas.length === 0) {
             $('#listaVendas').html(`
-                <div class="alert alert-info text-center">
-                    <h3><span class="glyphicon glyphicon-info-sign"></span> Nenhuma venda realizada ainda</h3>
-                    <p>Quando seus clientes finalizarem compras, as vendas aparecerão aqui!</p>
+                <div class="text-center" style="padding: 60px 20px;">
+                    <h2 style="color: #999;">
+                        <span class="glyphicon glyphicon-shopping-cart" style="font-size: 60px; display: block; margin-bottom: 20px;"></span>
+                        Nenhuma venda realizada ainda
+                    </h2>
+                    <p style="font-size: 16px; color: #666; margin: 20px 0;">
+                        Aguarde clientes comprarem seus produtos!
+                    </p>
                 </div>
             `);
             return;
@@ -106,63 +111,79 @@
                 <div class="venda-card">
                     <div class="venda-header">
                         <div>
-                            <div class="venda-numero">
-                                Venda #${venda.id_venda}
-                            </div>
-                            <div class="venda-data">
-                                <span class="glyphicon glyphicon-calendar"></span> 
-                                ${formatarData(venda.data_venda)}
-                            </div>
-                            <div class="venda-cliente">
-                                <span class="glyphicon glyphicon-user"></span> 
-                                Cliente: ${venda.nome_cliente}
-                            </div>
+                            <strong>Venda #${venda.id_venda}</strong><br>
+                            <small><span class="glyphicon glyphicon-calendar"></span> ${formatarData(venda.data_venda)}</small><br>
+                            <small><span class="glyphicon glyphicon-user"></span> Cliente: ${venda.nome_cliente}</small>
                         </div>
                         <div>
                             <span class="label label-success">Finalizada</span>
                         </div>
                     </div>
                     
-                    <div class="venda-itens">
+                    <div class="venda-produtos">
                         <h4>Produtos Vendidos:</h4>
             `;
-
-            // Listar itens da venda
-            venda.itens.forEach(function(item) {
-                let subtotal = item.quantidade * item.preco;
+            
+            venda.produtos.forEach(function(produto) {
+                let subtotal = produto.quantidade * produto.preco;
                 html += `
                     <div class="venda-item">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <strong>${item.nome_produto}</strong>
-                            </div>
-                            <div class="col-md-2 text-center">
-                                <span class="label label-default">${item.quantidade}x</span>
-                            </div>
-                            <div class="col-md-2 text-center">
-                                R$ ${parseFloat(item.preco).toFixed(2).replace('.', ',')}
-                            </div>
-                            <div class="col-md-2 text-right">
-                                <strong>R$ ${subtotal.toFixed(2).replace('.', ',')}</strong>
-                            </div>
+                        <div>
+                            <strong>${produto.nome_produto}</strong><br>
+                            <small>R$ ${parseFloat(produto.preco).toFixed(2).replace('.', ',')} × ${produto.quantidade}</small>
+                        </div>
+                        <div class="text-right">
+                            <strong>R$ ${subtotal.toFixed(2).replace('.', ',')}</strong>
                         </div>
                     </div>
                 `;
             });
-
+            
+            html += `</div>`;
+            
+            // Mostrar resumo da venda
+            html += `<div class="venda-total">`;
+            
+            // Subtotal
             html += `
-                    </div>
-                    <div class="venda-total">
-                        Total da Venda: R$ ${parseFloat(venda.total).toFixed(2).replace('.', ',')}
-                    </div>
+                <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                    <span>Subtotal:</span>
+                    <span>R$ ${parseFloat(venda.subtotal).toFixed(2).replace('.', ',')}</span>
                 </div>
             `;
+            
+            // Cupom (se foi usado)
+            if (venda.valor_desconto > 0 && venda.cupom) {
+                let cupom_texto = venda.cupom.tipo == '%' 
+                    ? venda.cupom.desconto + '%' 
+                    : 'R$ ' + parseFloat(venda.cupom.desconto).toFixed(2).replace('.', ',');
+                
+                html += `
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0; color: #27ae60; font-weight: 500; border-top: 1px dashed #ddd; border-bottom: 1px dashed #ddd; margin: 5px 0;">
+                        <span>
+                            <span class="glyphicon glyphicon-tags"></span> 
+                            Cupom: <strong>${venda.cupom.nome}</strong> (${cupom_texto})
+                        </span>
+                        <span>-R$ ${parseFloat(venda.valor_desconto).toFixed(2).replace('.', ',')}</span>
+                    </div>
+                `;
+            }
+            
+            // Total
+            html += `
+                <div style="display: flex; justify-content: space-between; font-size: 20px; font-weight: bold; color: #27ae60; border-top: 2px solid #eee; padding-top: 10px; margin-top: 5px;">
+                    <span>Total da Venda:</span>
+                    <span>R$ ${parseFloat(venda.total).toFixed(2).replace('.', ',')}</span>
+                </div>
+            `;
+            
+            html += `</div></div>`;
         });
 
         $('#listaVendas').html(html);
     }
 
-    // Formatar data brasileira
+    // Formatar data (adicione se não existir)
     function formatarData(dataString) {
         let data = new Date(dataString);
         let dia = String(data.getDate()).padStart(2, '0');
@@ -170,7 +191,6 @@
         let ano = data.getFullYear();
         let horas = String(data.getHours()).padStart(2, '0');
         let minutos = String(data.getMinutes()).padStart(2, '0');
-        
         return `${dia}/${mes}/${ano} às ${horas}:${minutos}`;
     }
 </script>

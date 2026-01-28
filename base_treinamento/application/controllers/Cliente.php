@@ -8,6 +8,7 @@ class Cliente extends CI_Controller {
 		$this->load->library('template');
 		$this->load->model('produtos_model');
 		$this->load->model('carrinho_model');
+		$this->load->model('cupom_model');
 		
 		// Verificar se o usuário está logado e é do tipo Cliente (1)
 		if (!$this->session->userdata('id_usuario') || $this->session->userdata('tipo_acesso') != '1') {
@@ -58,10 +59,11 @@ class Cliente extends CI_Controller {
 	/**
 	 * AJAX - Listar pedidos do cliente
 	 */
+
 	public function ajax_listarPedidos(){
 		$id_usuario = $this->session->userdata('id_usuario');
 		
-		$this->db->select('v.id_venda, v.data_venda, c.id_carrinho');
+		$this->db->select('v.id_venda, v.data_venda, v.valor_desconto, v.id_cupom, c.id_carrinho');
 		$this->db->from('venda v');
 		$this->db->join('carrinho c', 'c.id_carrinho = v.id_carrinho');
 		$this->db->where('c.id_usuario', $id_usuario);
@@ -70,6 +72,7 @@ class Cliente extends CI_Controller {
 		
 		$pedidos = [];
 		foreach ($vendas as $venda) {
+			// Buscar itens do pedido
 			$this->db->select('ci.quantidade, p.nome as nome_produto, p.preco, u.nome_usuario as nome_loja');
 			$this->db->from('carrinho_item ci');
 			$this->db->join('produto p', 'p.id_produto = ci.id_produto');
@@ -77,15 +80,31 @@ class Cliente extends CI_Controller {
 			$this->db->where('ci.id_carrinho', $venda['id_carrinho']);
 			$itens = $this->db->get()->result_array();
 			
-			$total = 0;
+			// Calcular subtotal
+			$subtotal = 0;
 			foreach ($itens as $item) {
-				$total += $item['quantidade'] * $item['preco'];
+				$subtotal += $item['quantidade'] * $item['preco'];
 			}
+			
+			// Buscar informações do cupom (se foi usado)
+			$cupom_info = null;
+			if ($venda['id_cupom']) {
+				$this->db->select('nome, tipo, desconto');
+				$this->db->from('cupom');
+				$this->db->where('id_cupom', $venda['id_cupom']);
+				$cupom_info = $this->db->get()->row_array();
+			}
+			
+			$valor_desconto = $venda['valor_desconto'] ?? 0;
+			$total = $subtotal - $valor_desconto;
 			
 			$pedidos[] = [
 				'id_venda' => $venda['id_venda'],
 				'data_venda' => $venda['data_venda'],
 				'itens' => $itens,
+				'subtotal' => $subtotal,
+				'valor_desconto' => $valor_desconto,
+				'cupom' => $cupom_info, // ← NOVO
 				'total' => $total
 			];
 		}
@@ -109,6 +128,67 @@ class Cliente extends CI_Controller {
 
 		$produtos = $this->produtos_model->listarProdutosDisponiveisComFiltros($filtros);
 		echo json_encode($produtos);
+	}
+
+	/**
+	 * AJAX - Validar e aplicar cupom
+	 */
+	public function ajax_validarCupom(){
+		$codigo = $this->input->post('codigo');
+		$valor_carrinho = $this->input->post('valor_carrinho');
+		$id_usuario = $this->session->userdata('id_usuario');
+		
+		$resultado = [
+			'sucesso' => false,
+			'mensagem' => '',
+			'cupom' => null,
+			'valor_desconto' => 0
+		];
+
+		if (empty($codigo)) {
+			$resultado['mensagem'] = 'Digite o código do cupom';
+			echo json_encode($resultado);
+			return;
+		}
+
+		if ($valor_carrinho <= 0) {
+			$resultado['mensagem'] = 'Carrinho vazio';
+			echo json_encode($resultado);
+			return;
+		}
+
+		// Buscar produtos do carrinho para identificar a loja
+		$id_carrinho = $this->carrinho_model->buscarOuCriarCarrinho($id_usuario);
+		$itens = $this->carrinho_model->listarItensCarrinho($id_carrinho);
+
+		if (empty($itens)) {
+			$resultado['mensagem'] = 'Carrinho vazio';
+			echo json_encode($resultado);
+			return;
+		}
+
+		// Pegar a loja do primeiro produto (assumindo que todos são da mesma loja)
+		// Se tiver produtos de lojas diferentes, pegar a loja que tem o cupom válido
+		$id_loja = $itens[0]['id_loja'];
+
+		// Validar cupom
+		$validacao = $this->cupom_model->validarCupom($codigo, $valor_carrinho, $id_loja, $id_usuario);
+
+		if ($validacao['valido']) {
+			$resultado['sucesso'] = true;
+			$resultado['mensagem'] = $validacao['mensagem'];
+			$resultado['cupom'] = [
+				'id_cupom' => $validacao['cupom']['id_cupom'],
+				'codigo' => $validacao['cupom']['nome'],
+				'tipo' => $validacao['cupom']['tipo'],
+				'desconto' => $validacao['cupom']['desconto']
+			];
+			$resultado['valor_desconto'] = $validacao['valor_desconto'];
+		} else {
+			$resultado['mensagem'] = $validacao['mensagem'];
+		}
+
+		echo json_encode($resultado);
 	}
 
 	/**
@@ -195,7 +275,7 @@ class Cliente extends CI_Controller {
 				$resultado['total'] = $this->carrinho_model->calcularTotal($id_carrinho);
 			} else {
 				$resultado['mensagem'] = "Erro ao atualizar";
-            }
+			}
 		}
 
 		echo json_encode($resultado);
@@ -223,12 +303,36 @@ class Cliente extends CI_Controller {
 	}
 
 	/**
-	 * AJAX - Finalizar compra
+	 * AJAX - Finalizar compra (ATUALIZADO COM CUPOM)
 	 */
 	public function ajax_finalizarCompra(){
 		$id_usuario = $this->session->userdata('id_usuario');
 		$id_carrinho = $this->carrinho_model->buscarOuCriarCarrinho($id_usuario);
+		
+		// Receber dados do cupom (se houver)
+		$id_cupom = $this->input->post('id_cupom');
+		$valor_desconto = $this->input->post('valor_desconto');
+		
+		// Finalizar compra
 		$resultado = $this->carrinho_model->finalizarCompra($id_carrinho);
+		
+		if ($resultado['sucesso']) {
+			$id_venda = $resultado['id_venda'];
+			
+			// Se houver cupom, registrar uso e atualizar venda
+			if ($id_cupom && $valor_desconto > 0) {
+				// Atualizar venda com cupom
+				$this->db->where('id_venda', $id_venda);
+				$this->db->update('venda', [
+					'id_cupom' => $id_cupom,
+					'valor_desconto' => $valor_desconto
+				]);
+				
+				// Registrar uso do cupom
+				$this->cupom_model->registrarUso($id_cupom, $id_usuario, $id_venda, $valor_desconto);
+			}
+		}
+		
 		echo json_encode($resultado);
 	}
 }
