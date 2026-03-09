@@ -1,6 +1,6 @@
-# 🛒 E-Commerce Simulado — Desafio de Estágio
+# 🛒 E-Commerce Simulado — 
 
-> Projeto desenvolvido como desafio prático de estágio, simulando um sistema completo de e-commerce com back-end em PHP e banco de dados relacional.
+> Projeto desenvolvido como desafio prático, simulando um sistema completo de e-commerce com back-end em PHP e banco de dados relacional.
 
 ---
 
